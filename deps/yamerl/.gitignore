@@ -1,0 +1,32 @@
+.sw?
+.*.sw?
+*.beam
+Makefile.in
+/ac-aux/
+/aclocal.m4
+/autom4te.cache/
+/config.h.in
+/config.h.in~
+/configure
+
+# Files produced by Debian package.
+build-stamp
+configure-stamp
+debian/*.debhelper.log
+debian/*.substvars
+debian/*/
+debian/build/
+debian/files
+!debian/source/
+
+# Files produced by rebar.
+/.eunit/
+/.rebar/
+/rebar
+/deps/
+/test/
+/ebin/yamerl.app
+
+# Elixir Support
+/_build/
+*.ez

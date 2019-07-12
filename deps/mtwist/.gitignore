@@ -1,0 +1,4 @@
+ebin
+priv/*
+c_src/*.o
+c_src/mtwist_nif.d

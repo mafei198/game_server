@@ -1,0 +1,25 @@
+{application, eredis_pool,
+ [
+  {description, ""},
+  {vsn, "1.1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { eredis_pool_app, []}},
+  {env, []}
+
+%% sample configuration.
+%%
+%%  {env, [
+%%          {pools, [
+%%                   {dbsrv, [
+%%                              {size, 10},
+%%                              {max_overflow, 30}
+%%                             ]}
+%%	          ]}
+%%        ]}
+%%
+
+]}.

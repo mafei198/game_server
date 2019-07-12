@@ -1,0 +1,10 @@
+- !<tag:yamerl,2012:atom> atom
+- !<tag:yamerl,2012:atom> atom requiring quoting!
+
+- atom
+- node@domain
+
+- not an atom
+- NotAnAtom
+- 'Not an atom'
+- "Not an atom"

@@ -1,0 +1,71 @@
+all:
+	cd game_server && tools/install
+
+console:
+	cd game_server && tools/start
+
+load:
+	cd game_server && erl -pa ebin deps/*/ebin
+
+start:
+	cd game_server && tools/start_daemon
+
+deamon:
+	cd game_server && tools/start_daemon -e production
+
+stop:
+	cd game_server && tools/stop_daemon
+
+attach:
+	cd game_server && tools/attach_daemon
+
+install_test:
+	cd game_server && tools/install -e test
+
+test:
+	cd game_server && tools/run_test
+
+clean:
+	cd game_server && ./rebar clean
+
+compile:
+	cd game_server && ./rebar compile
+
+get-deps:
+	cd game_server && ./rebar get-deps
+update-deps:
+	cd game_server && ./rebar update-deps
+delete-deps:
+	cd game_server && ./rebar delete-deps
+
+rc:
+	cd app/server_engine && rails c
+
+migrate:
+	cd app/server_engine && rake db:migrate
+generate_api:
+	cd app/server_engine && rake generate_api
+generate_config:
+	cd app/server_engine && rake generate_config
+generate_db:
+	cd app/server_engine && rake generate_database_record
+generate_record:
+	cd app/server_engine && rake generate_record
+
+setup_production:
+	cd app/server_engine && RAILS_ENV=production rake setup
+resetup_production:
+	cd game_server && ./rebar clean
+	cd game_server && rm -rf Mnesia.*
+	cd app/server_engine && rake db:drop:all
+	cd game_server && tools/install -e production
+
+setup:
+	cd app/server_engine && rake setup
+purge:
+	cd app/server_engine && rake db:drop:all
+resetup:
+	cd game_server && ./rebar clean
+	cd game_server && rm -rf Mnesia.*
+	cd app/server_engine && rake db:drop:all
+	cd game_server && tools/install

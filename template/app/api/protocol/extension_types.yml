@@ -1,0 +1,27 @@
+########################### Models ###########################
+ok:
+  code: integer
+
+fail:
+  code: integer
+  desc: string
+
+delete:
+  target_name: string
+  target_uuid: string
+
+delete_all:
+  target_name: string
+
+user:
+  uuid: string
+  udid: string
+  name: string
+
+###########################Request Parameters###########################
+login_params:
+  udid: string
+  server_id: integer
+  locale: string
+  channel: integer
+  device_type: string

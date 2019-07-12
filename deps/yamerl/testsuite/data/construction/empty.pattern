@@ -1,0 +1,18 @@
+%% vim:ft=erlang:
+
+%% TEST
+{setup,
+  fun() ->
+      application:start(yamerl)
+  end,
+  [
+    ?_assertMatch(
+      [],
+      yamerl_constr:file("${FILENAME}", [{detailed_constr, false}])
+    ),
+    ?_assertMatch(
+      [],
+      yamerl_constr:file("${FILENAME}", [{detailed_constr, true}])
+    )
+  ]
+}

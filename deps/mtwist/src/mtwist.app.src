@@ -1,0 +1,12 @@
+{application, mtwist,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { mtwist_app, []}},
+  {env, []}
+ ]}.

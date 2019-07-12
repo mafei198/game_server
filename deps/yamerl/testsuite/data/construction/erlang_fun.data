@@ -1,0 +1,2 @@
+!<tag:yamerl,2012:fun> |
+  fun() -> "Hello World!" end.

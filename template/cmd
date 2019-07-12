@@ -1,0 +1,83 @@
+#!/bin/sh
+
+## The MIT License (MIT)
+##
+## Copyright (c) 2014-2024
+## Savin Max <mafei.198@gmail.com>
+##
+## Permission is hereby granted, free of charge, to any person obtaining a copy
+## of this software and associated documentation files (the "Software"), to deal
+## in the Software without restriction, including without limitation the rights
+## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+## copies of the Software, and to permit persons to whom the Software is
+## furnished to do so, subject to the following conditions:
+##
+## The above copyright notice and this permission notice shall be included in all
+## copies or substantial portions of the Software.
+##
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+## IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+## FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+## AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+## LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+## OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+## SOFTWARE.
+
+CMD=$1
+SNAME=game_server
+COOKIE=server_local_cookie
+SERVER_ENV=development
+
+CWD=`basename "$PWD"`
+
+if [ -f ".$CWD.sname" ]; then
+  SNAME=`cat ".$CWD.sname"`
+fi
+
+# if [ -f ".$CWD.cookie" ]; then
+#   COOKIE=`cat ".$CWD.cookie"`
+# fi
+
+if [ -f ".$CWD.server_env" ]; then
+  SERVER_ENV=`cat ".$CWD.server_env"`
+fi
+
+if [ -f ".$CWD.database" ]; then
+  cp ".$CWD.database" app/server_engine/config/database.yml
+fi
+
+cd game_server
+case $CMD in
+  install)
+    cd ../app/server_engine
+    cd ../../game_server
+    ./tools/install -e $SERVER_ENV
+    ;;
+  reinstall)
+    ./tools/stop_daemon -n $SNAME
+    cd ../app/server_engine
+    cd ../../game_server
+    ./tools/install -e $SERVER_ENV
+    ./tools/start_daemon -n $SNAME -c $COOKIE -e $SERVER_ENV
+    ;;
+  start)
+    ./tools/start_daemon -n $SNAME -c $COOKIE -e $SERVER_ENV
+    ;;
+  stop)
+    ./tools/stop_daemon -n $SNAME
+    ;;
+  restart)
+    ./tools/stop_daemon -n $SNAME
+    ./tools/start_daemon -n $SNAME -c $COOKIE -e $SERVER_ENV
+    ;;
+  attach)
+    ./tools/stop_attach -n $SNAME
+    ./tools/attach_daemon -n $SNAME -c $COOKIE -s "${CWD}_attach"
+    ;;
+  hot_update)
+    cd ../app/server_engine
+    RAILS_ENV=$SERVER_ENV bundle exec rake setup
+    cd ../../game_server
+    ;;
+esac
+cd ..

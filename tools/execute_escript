@@ -1,0 +1,13 @@
+#!/usr/bin/env escript
+%% -*- erlang -*-
+
+-define(FILENAME, ".tmpescript").
+
+main([Filename, ConsoleNode, Cookie, Args]) ->
+    {ok, Sections} = escript:extract(Filename, []),
+    Arg = "-sname " ++ ConsoleNode ++ " -setcookie " ++ Cookie,
+    NSections = lists:keyreplace(emu_args, 1, Sections, {emu_args, Arg}),
+    escript:create(?FILENAME, NSections),
+    Result = os:cmd("escript " ++ ?FILENAME ++ " " ++ Args),
+    io:format(Result),
+    os:cmd("rm " ++ ?FILENAME).

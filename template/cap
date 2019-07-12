@@ -1,0 +1,171 @@
+#!/usr/bin/env ruby
+
+## The MIT License (MIT)
+##
+## Copyright (c) 2014-2024
+## Savin Max <mafei.198@gmail.com>
+##
+## Permission is hereby granted, free of charge, to any person obtaining a copy
+## of this software and associated documentation files (the "Software"), to deal
+## in the Software without restriction, including without limitation the rights
+## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+## copies of the Software, and to permit persons to whom the Software is
+## furnished to do so, subject to the following conditions:
+##
+## The above copyright notice and this permission notice shall be included in all
+## copies or substantial portions of the Software.
+##
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+## IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+## FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+## AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+## LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+## OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+## SOFTWARE.
+
+
+require 'yaml'
+$deploy_config = YAML.load_file(File.expand_path("./deploy.yml"))
+SERVERS = $deploy_config["servers"]
+
+remotes = `git remote`.split("\n")
+locales = SERVERS.values.map{|v| v['config']['zone']}.uniq
+server_names = SERVERS.keys
+
+# Add the missing servers to git remote
+SERVERS.each do |name, addr|
+  `git remote add #{name} "#{addr['url']}"` unless remotes.include?(name)
+end
+
+# Remove the unused git remotes
+remotes.each do |name|
+  next if name == "origin"
+  `git remote remove #{name}` unless SERVERS.include?(name)
+end
+
+cmd 	= ARGV[0]
+scope   = (ARGV[1] || 'game_server')
+branch 	= ARGV[2] || 'master'
+
+unless ['setup', 'deploy', 'rollback', 'rerun', 'restart', 'upload', 'hooks'].include?(cmd)
+  puts "USAGE:"
+  puts "	Setup remotes with scope: #{__FILE__} setup [scope]"
+  puts "	Deploy remotes with branch and scope: #{__FILE__} deploy [scope, [branch]]"
+  puts "	Rollback remotes with scope to previous revision: #{__FILE__} rollback [scope]"
+end
+
+# Select targets by scope.
+if server_names.include?(scope)
+  targets = [scope]
+elsif locales.include?(scope)
+  targets = []
+  SERVERS.each do |k, v|
+    if v['config']['zone'] == scope
+      targets << k
+    end
+  end
+elsif scope == "all_servers"
+  targets = server_names
+end
+
+def generate_deploy_config(target)
+  info = SERVERS[target]
+  path = "./#{target}.server.config"
+  File.open(path, "w") do |io|
+    kvs = info['config'].map do |k, v|
+      "    {#{k}, #{v}}"
+    end
+    io.puts "["
+    io.puts "  {game_server, ["
+    io.puts kvs.join(",\n")
+    io.puts "  ]},"
+    io.puts "  {timertask, ["
+    io.puts kvs.join(",\n")
+    io.puts "  ]}"
+    io.puts "]."
+  end
+  system("git deploy upload #{path} -r #{target}")
+  `rm #{path}`
+
+  path = "./.#{target}.sname"
+  File.open(path, "w") do |io|
+    io.puts "#{target}"
+  end
+  system("git deploy upload #{path} -r #{target}")
+  `rm #{path}`
+
+  path = "./.#{target}.cookie"
+  File.open(path, "w") do |io|
+    io.puts "#{target}_cookie"
+  end
+  system("git deploy upload #{path} -r #{target}")
+  `rm #{path}`
+
+  path = "./.#{target}.server_env"
+  File.open(path, "w") do |io|
+    io.puts $deploy_config['deploy_env']
+  end
+  system("git deploy upload #{path} -r #{target}")
+  `rm #{path}`
+
+  path = "./.#{target}.server_locale"
+  File.open(path, "w") do |io|
+    io.puts info['config']['zone']
+  end
+  system("git deploy upload #{path} -r #{target}")
+  `rm #{path}`
+
+  db_path = File.expand_path("./app/server_engine/config/database.yml")
+  database = YAML.load_file(db_path)
+  database['production']['database'] = "#{info["config"]["database"]}_production"
+  database['development']['database'] = "#{info["config"]["database"]}_development"
+  path = "./.#{target}.database"
+  File.open(path, "w") do |io|
+    io.puts database.to_yaml
+  end
+  system("git deploy upload #{path} -r #{target}")
+  `rm #{path}`
+end
+
+# Operate multi server with threads.
+cmd and targets and targets.map do |target|
+  Thread.new do
+    if cmd == 'deploy'
+      puts "============>Begin to DEPLOY #{target}"
+      unless branch.to_s == "master"
+        branch = "+#{branch}:master"
+      end
+      system("git push #{target} #{branch}")
+      puts "<===========Finished to DEPLOY #{target}"
+
+    elsif cmd == 'setup'
+      puts "============>Begin to SETUP #{target}"
+      system("git deploy setup -r #{target}")
+      generate_deploy_config(target)
+      puts "<===========Finished to SETUP #{target}"
+
+    elsif cmd == 'rollback'
+      puts "============>Begin to ROLLBACK #{target}"
+      system("git deploy rollback -r #{target}")
+      puts "<===========Finished to ROLLBACK #{target}"
+
+    elsif cmd == 'rerun'
+      puts "============>Begin to RERUN #{target}"
+      system("git deploy rerun -r #{target}")
+      puts "<===========Finished to RERUN #{target}"
+
+    elsif cmd == 'restart'
+      puts "============>Begin to RESTART #{target}"
+      system("git deploy restart -r #{target}")
+      puts "<===========Finished to RESTART #{target}"
+
+    elsif cmd == 'hooks'
+      puts "============>Begin to UPDATE HOOKS #{target}"
+      system("git deploy hooks -r #{target}")
+      puts "<===========Finished to UPDATE HOOKS #{target}"
+
+    else
+      raise "Invalid cmd: #{cmd}"
+    end
+  end
+end.each(&:join)

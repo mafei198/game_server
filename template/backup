@@ -1,0 +1,83 @@
+#!/usr/bin/env ruby
+
+## The MIT License (MIT)
+##
+## Copyright (c) 2014-2024
+## Savin Max <mafei.198@gmail.com>
+##
+## Permission is hereby granted, free of charge, to any person obtaining a copy
+## of this software and associated documentation files (the "Software"), to deal
+## in the Software without restriction, including without limitation the rights
+## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+## copies of the Software, and to permit persons to whom the Software is
+## furnished to do so, subject to the following conditions:
+##
+## The above copyright notice and this permission notice shall be included in all
+## copies or substantial portions of the Software.
+##
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+## IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+## FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+## AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+## LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+## OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+## SOFTWARE.
+
+require "yaml"
+
+server_name   = `basename "$PWD"`.chomp
+server_env    = `cat ".#{server_name}.server_env"`.chomp
+server_locale = `cat ".#{server_name}.server_locale"`.chomp
+
+##################Backup Config###########################
+#数据库名称
+db_name     = YAML.load_file(".#{server_name}.database")[server_env]["database"]
+#备份地址
+backup_dir  = '~/backups'
+#数据库用户名
+db_username = 'root'
+#备份选项
+options     = '--quick --single-transaction'
+#备份名字
+dump_name   = server_name
+#备份保存的天数
+keep_day    = 5
+#存储备份的服务器备选地址
+remote_servers = {
+  # cn: "ubuntu@42.96.138.143:/home/ubuntu/backups",
+  en: "ubuntu@115.29.14.9:/home/ubuntu/backups"
+}
+#存储备份的服务器地址
+remote_addr = remote_servers[server_locale] || remote_servers[:en]
+##################Backup Config###########################
+
+
+##################System Execution###########################
+#获取备份目录的绝对路径
+backup_dir = File.expand_path(backup_dir)
+
+#寻找或创建备份目录
+Dir.mkdir(backup_dir) unless File.exist?(backup_dir)
+
+#生成当前时间的自定义时间戳
+time_now = Time.now
+time_stamp  = "#{time_now.year}_#{time_now.month}_#{time_now.day}_#{time_now.hour}"
+
+#备份文件的绝对路径
+full_dump_name = "#{backup_dir}/#{time_stamp}-#{dump_name}.sql"
+package_name = "#{backup_dir}/#{time_stamp}-#{dump_name}.tar"
+
+#备份数据库
+system("mysqldump -u#{db_username} #{db_name} #{options} > #{full_dump_name}")
+
+#压缩备份
+system("tar -czf #{package_name} #{full_dump_name} ~/redis_db_data/appendonly.aof game_server/Mnesia.#{server_name}@localhost")
+#删除非压缩包
+system("rm -rf #{full_dump_name}")
+
+#传输备份至指定服务器
+system("scp #{package_name} #{remote_addr}")
+
+#清理N天前的备份
+system("cd #{backup_dir} && find * -type f -mtime +#{keep_day} -exec rm {} \\;")
+##################System Execution###########################

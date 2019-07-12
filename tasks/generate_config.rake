@@ -1,0 +1,213 @@
+## The MIT License (MIT)
+##
+## Copyright (c) 2014-2024
+## Savin Max <mafei.198@gmail.com>
+##
+## Permission is hereby granted, free of charge, to any person obtaining a copy
+## of this software and associated documentation files (the "Software"), to deal
+## in the Software without restriction, including without limitation the rights
+## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+## copies of the Software, and to permit persons to whom the Software is
+## furnished to do so, subject to the following conditions:
+##
+## The above copyright notice and this permission notice shall be included in all
+## copies or substantial portions of the Software.
+##
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+## IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+## FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+## AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+## LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+## OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+## SOFTWARE.
+
+class String
+  def is_number?
+    true if Float(self) rescue false
+  end
+end
+
+desc "Generate configs file from Excel"
+task :generate_config => :environment do
+  config_dir = File.expand_path("#{FRAMEWORK_ROOT_DIR}/app/config_data/gameconfig")
+  sheets = []
+
+  parser_path = File.expand_path("#{FRAMEWORK_ROOT_DIR}/app/config_data/custom_config_parser.rb")
+  if File.exists?(parser_path)
+    require parser_path
+  else
+    CUSTOM_PARSER = {}
+  end
+
+  table_map = {}
+  Dir.foreach(config_dir) do |config_file_path|
+    next if config_file_path =~ /~\$.+\.xls/
+    extname = File.extname(config_file_path)
+    if extname == '.xlsx'
+      s = Roo::Excelx.new(File.expand_path(config_dir + '/' + config_file_path))
+    elsif extname == '.xls'
+      s = Roo::Excel.new(File.expand_path(config_dir + '/'+ config_file_path))
+    else
+      next
+    end
+
+    s.sheets.each do |sheet|
+      next if sheet !~ /^config_.+/
+      sheets << sheet
+    end
+
+    s.sheets.each do |sheet|
+      next if sheet !~ /^config_.+/
+      custom_parser = CUSTOM_PARSER[sheet.pluralize]
+      # puts "generating sheet: #{sheet} "
+      s.default_sheet = sheet
+      table_name = sheet.pluralize
+      table_map[table_name] = {field_names: [], rows: []}
+      field_names = {}
+      field_indexes = {}
+      s.row(2).each_with_index do |field, index|
+        begin
+          next if field.blank?
+          name, type = field.split(":")
+          field_names[index] = name
+          field_indexes[index] = type
+          table_map[table_name][:field_names] << name
+          unless ['string', 'text', 'integer', 'int', 'float', 'boolean', 'integer-array', 'float-array', 'origin'].include?(type)
+            raise "TYPE ERROR: #{type} didn't defined."
+          end
+        rescue => e
+          puts "In sheet: #{sheet}, field: #{field}"
+          raise e
+        end
+      end
+      4.upto(s.last_row).map do |row|
+        row_values = []
+        row_vs = s.row(row)
+        if row_vs[0].blank?
+          next
+        end
+        row_vs.each_with_index do |value, index|
+          next if field_indexes[index].nil?
+          field_name = field_names[index]
+          if value == 'NULL'
+            value = 'undefined'
+          elsif custom_parser and custom_parser[field_name]
+            value = custom_parser[field_name].call(value)
+          else
+            field_type = field_indexes[index]
+            if field_type == 'integer' or field_type == 'int'
+              if value.blank?
+                value = 0 
+              else
+                value = value.to_i
+              end
+            elsif field_type == 'integer-array' or field_type == 'int-array' or field_type == 'float-array'
+              if value.nil?
+                value = "[]"
+              else
+                value = "[#{value.gsub(";", ",")}]"
+              end
+            elsif field_type == 'float'
+              value = 0.0 if field_type == 'float' and value.blank?
+            elsif field_type == 'string' or field_type == 'text'
+              value_class = value.class
+              if value_class == Fixnum or value_class == Float
+                value = value.to_i.to_s
+              end
+              if value.nil?
+                value = "<<\"\">>"
+              else
+                value = "<<\"#{value.gsub('"', '\"')}\">>"
+              end
+            elsif field_type == 'origin' and value.blank?
+              value = 'undefined'
+            end
+          end
+          row_values << value
+        end
+        table_map[table_name][:rows] << row_values
+      end
+    end
+
+  end
+
+
+  names_path = "#{FRAMEWORK_ROOT_DIR}/app/include/config_data_names.hrl"
+  names_content = ""
+  names_content << "%%% Generated by generate_config.rake \n"
+  names_content << "-define(CONFIG_DATA_NAMES, [\n"
+  table_names = table_map.map{|table_name, v| table_name}
+  names_content << %Q{    #{table_names.join(",\n    ")}}
+  names_content << "])."
+
+
+  records_path = "#{FRAMEWORK_ROOT_DIR}/app/include/config_data_records.hrl"
+  records_content = ""
+  records_content << "%%% Generated by generate_config.rake \n"
+  table_map.each do |table_name, data|
+    records_content << "-record(#{table_name}, {\n"
+    size = data[:field_names].size
+    data[:field_names].each_with_index do |field, index|
+      records_content << "        #{field}"
+      records_content << ",\n" if index < size - 1
+    end
+    records_content << "}).\n\n"
+  end
+
+
+  `mkdir -p #{FRAMEWORK_ROOT_DIR}/app/generates/configs`
+
+  table_map.each do |table_name, data|
+    data_content = "%% -*- coding: latin-1 -*-\n"
+    data_content << "%%% Generated by generate_config.rake \n"
+    content = []
+
+    rows = data[:rows].map do |row_values|
+      "{#{row_values.first}, {#{table_name}, #{row_values.join(', ')}}}"
+    end
+
+    data_path = "#{FRAMEWORK_ROOT_DIR}/app/generates/configs/#{table_name}.erl"
+    content << %Q([#{rows.join(", \n")}])
+    data_content << %Q{
+-module(#{table_name}).
+-export([find/1, all/0, first/0, last/0]).
+
+-define(MAP, #{content.join(",")}).
+
+find(Key) ->
+    case lists:keyfind(Key, 1, ?MAP) of
+        false -> undefined;
+        {Key, Value} -> Value
+    end.
+
+first() ->
+    Map = ?MAP,
+    case length(Map) of
+        0 -> undefined;
+        _ -> 
+            {_Key, Value} = hd(Map),
+            Value
+    end.
+
+last() ->
+    Map = ?MAP,
+    case length(Map) of
+        0 -> undefined;
+        _ -> 
+            {_Key, Value} = lists:last(Map),
+            Value
+    end.
+
+all() ->
+    Map = ?MAP,
+    R = lists:foldl(fun({_Id, Record}, Result) ->
+        [Record|Result]
+    end, [], Map),
+    lists:reverse(R).
+}
+    check_to_write(data_path, data_content)
+  end
+
+    check_to_write(names_path, names_content)
+    check_to_write(records_path, records_content)
+end

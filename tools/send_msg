@@ -1,0 +1,12 @@
+#!/usr/bin/env escript
+%% -*- erlang -*-
+%%! -sname send_msg_console -setcookie server_local_cookie
+
+main([Node, Msg]) ->
+    register(send_msg_deamon, self()),
+    case rpc:call(list_to_atom(Node), game_server, send_msg, [Msg], infinity) of
+        {badrpc, Reason} -> io:fwrite("{badrpc, ~p}~n", [Reason]);
+        Response ->
+            io:fwrite("==> Sending Game Server Msg: ~p~n", [Msg]),
+            io:fwrite("Response: ~p~n", [Response])
+    end.

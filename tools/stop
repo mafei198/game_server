@@ -1,0 +1,18 @@
+#!/usr/bin/env escript
+%% -*- erlang -*-
+%%! -sname stop_console -setcookie server_local_cookie
+
+main([Node]) ->
+    register(stop_deamon, self()),
+    case rpc:call(list_to_atom(Node), game_server, stop, [], infinity) of
+        {badrpc, Reason} -> io:fwrite("{badrpc, ~p}~n", [Reason]);
+        ok ->
+            io:fwrite("==> Stopping Game Server...~n"),
+            receive
+                stopped ->
+                    timer:sleep(1000),
+                    io:fwrite("GAME SERVER STOPPED!~n");
+                is_stopping ->
+                    io:fwrite("ERROR GAME SERVER IS STOPPING!~n")
+            end
+    end.

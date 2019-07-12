@@ -1,0 +1,12 @@
+{application, data_holder,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { data_holder_app, []}},
+  {env, []}
+ ]}.
